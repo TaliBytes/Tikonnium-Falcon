@@ -1,21 +1,22 @@
 from machine import Pin, PWM
-import network
-import os
+import network, socket
 import time
 import uasyncio #micro-python version of asyncio
 
 
+
 ssidName:str|None = None
 ssidPwd :str|None = None
+ip:str|None = None
+wlan = network.WLAN(network.STA_IF)
+wlan.active(True)
 
 # IMPORT WIFI CONFIGURATION ... 
 def getConfig()->None:
   global ssidName, ssidPwd
 
-  print('dir:', os.listdir())
-
   try:
-    with open('/config.config', 'r') as config:
+    with open('config.config', 'r') as config:
 
       for line in config:
         line:str = line.strip()
@@ -25,33 +26,49 @@ def getConfig()->None:
           setting = setting.strip()
           value = value.strip()
 
-          if setting == "ssidName":
-            ssidName = value
-          elif setting == "ssidPwd":
-            ssidPwd = ssidPwd
+          if setting == "ssidName": ssidName = value
+          if setting == "ssidPwd": ssidPwd = value
 
   except Exception as err:
     print('Fatal Error: config.config error ... ' + str(err))
 
 
 
+# Connect to the hotspot
 def connectToHotspot()->None:
-  global ssidName, ssidPwd
+  global ssidName, ssidPwd, wlan, ip
 
   if ssidName != None and ssidPwd != None:
-    wlan = network.WLAN(network.STA_IF)
-    wlan.active(True)
-    print(ssidName, ssidPwd)
+    s:int=0 #number of secs attempting connection
+    timeout:int=20
     wlan.connect(ssidName, ssidPwd)
 
-    while not wlan.isconnected():
-      print("Connecting to hotspot...")
+    while not wlan.isconnected() and s <= timeout:
+      print(f"Connecting to {ssidName}... {s}s")
+      s+=1
       time.sleep(1)
 
-    print(f"Connected to {ssidName}!, Config:, {wlan.ifconfig()}")
+    if wlan.isconnected():
+      print(f"Connected to {ssidName}!, Config:, {wlan.ifconfig()}")
+      ip = wlan.ifconfig()[0]
+    else:
+      print(f"Could not connect to. Check credentials and signal strength.")
   
   else:
     print('Missing ssidName or ssidPwd')
+
+
+
+# Listen for commands on port 8000
+def openSocket():
+  global ip
+
+  address = (ip, 8000)
+  conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+  conn.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+  conn.bind(address)
+  conn.listen(1)
+  return(conn)
 
 
 
@@ -192,11 +209,32 @@ async def tikoSetRight(dir:int=0)->None:
 
 # main logic loop
 async def main():
+
   getConfig()
   connectToHotspot()
+  conn = openSocket()
 
   while True:
-    await tikoSetLeft(0)
-    await tikoSetRight(0)
+    client = conn.accept()[0]
+    rqst = client.recv(1024)
+    rqst = str(rqst)
+    rqst = rqst.split()[1]
+
+    if rqst == '/left?':
+      print(rqst)
+      await tikoSetLeft(1)
+      await uasyncio.sleep(1)
+      await tikoSetLeft(0)
+      client.send('<p>Left</p>')
+      
+    elif rqst == '/right?':
+      print(rqst)
+      await tikoSetRight(1)
+      await uasyncio.sleep(1)
+      await tikoSetRight(0)
+      client.send('<p>Right</p>')
+    
+    client.close()
+
 
 uasyncio.run(main())
