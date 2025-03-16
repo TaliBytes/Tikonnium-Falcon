@@ -1,15 +1,29 @@
-from machine import Pin, PWM
+#networking
+#import datetime
 import network, socket
+
+#micro-controller
+import asyncio
+from machine import Pin, PWM
 import time
-import uasyncio #micro-python version of asyncio
 
 
-
+#GLOBAL VARIABLES
 ssidName:str|None = None
 ssidPwd :str|None = None
 ip:str|None = None
+port:int = 9000
 wlan = network.WLAN(network.STA_IF)
 wlan.active(True)
+
+request_headers:dict = {}     # client's request headers
+response_headers:dict = {}    # server's response headers
+response_content:str = ''     # content returned by server
+sockets:list = []             # hosts/ports to bind to  (except Tiko only gets one)
+
+
+
+
 
 # IMPORT WIFI CONFIGURATION ... 
 def getConfig()->None:
@@ -34,13 +48,15 @@ def getConfig()->None:
 
 
 
+
+
 # Connect to the hotspot
 def connectToHotspot()->None:
   global ssidName, ssidPwd, wlan, ip
 
   if ssidName != None and ssidPwd != None:
     s:int=0 #number of secs attempting connection
-    timeout:int=20
+    timeout:int=10
     wlan.connect(ssidName, ssidPwd)
 
     while not wlan.isconnected() and s <= timeout:
@@ -59,16 +75,124 @@ def connectToHotspot()->None:
 
 
 
-# Listen for commands on port 8000
-def openSocket():
-  global ip
 
-  address = (ip, 8000)
-  conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-  conn.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-  conn.bind(address)
-  conn.listen(1)
-  return(conn)
+
+# Listen on sockets
+def setupSockets()->None:
+  """Configure socket to listen on"""
+  global sockets, ip, port
+
+  aSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+  aSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+  sockets.append(aSocket)
+
+  # bind socket to port
+  try:
+    aSocket.bind((ip, port))
+    aSocket.listen(5) # max connections
+    print(f"Configured socket binding for {ip}:{port}")
+  except Exception as err:
+    print(f"Couldn't configure socket binding for {ip}:{port} ... Error: {str(err)}")
+    aSocket.close() # close on err
+    return None
+
+  aSocket.close() # close when done
+
+
+
+
+
+def getContent()->str:
+  """Returns HTML based on request headers"""
+  global request_headers
+  content:str = ''
+
+  path = request_headers['path']
+  if path in ['', '/', '/home']:
+    content = 'home'
+  else:
+    content = f"not-home, is {path}"
+  
+  return(content)
+
+
+
+
+
+def parseRequest(request:str)->None:
+  global request_headers
+  request_headers = {}
+
+  request = str(request)
+  lines:list = request.split("\r\n")
+
+  rqstLine:str = lines[0]
+  method, path, protocol = rqstLine.split(' ')
+  request_headers['method'] = method
+  request_headers['path'] = path
+  request_headers['protocol'] = protocol
+  #request_headers['date'] = datetime.datetime.now().strftime("%a, $d %b %Y %H:%M:00 MST")
+
+  for line in lines[1:]:
+    if line == "":
+      break
+      
+    key, value = line.split(":", 1)
+    request_headers[key.strip()] = value.strip()
+
+
+
+
+
+def constructResponse()->bytes:
+  """Setup initial headers, get desired response, send it"""
+  global response_headers
+  global response_content
+
+  response_content = getContent()
+
+  response_headers.setdefault('statusCode', 200)
+  response_headers.setdefault('statusMessage', 'OK')
+  response_headers.setdefault('contentType', 'text/html; charset="UTF-8"')
+  response_headers.setdefault('connection', 'close')
+
+  # construct response header
+  headers =  f"HTTP/1.1 {response_headers['statusCode']} {response_headers['statusMessage']}\r\n"
+  headers += f"Content-Length: {len(response_content.encode('utf-8'))}\r\n"
+  headers += f"Connection: {response_headers['connection']}\r\n"  
+  headers += f"Content-Type: {response_headers['contentType']}\r\n"
+  #headers += f"Date: {datetime.datetime.now().strftime('%a, %d %b %Y %H:%M:00 MST')}\r\n"
+
+  headers += f"\r\n"  #marks end of headers, start of body
+
+  headersEncoded = headers.encode('utf-8')
+  contentEncoded = response_content.encode('utf-8')
+
+  response = headersEncoded + contentEncoded
+  return(response)
+
+
+
+
+
+async def handleRequest(reader, writer)->None:
+  """Handle a clietn request"""
+  request = await reader.read(1024)
+  clientAddr = writer.get_extra_info('peername')
+
+  if len(request) > 0:
+    parseRequest(request.decode('utf-8'))
+    print(f"\nconn with {clientAddr}: requested {request_headers['path']}")
+
+    response = constructResponse()
+    writer.write(response)
+    print(f"conn withh {clientAddr}: sent response")
+    await writer.drain()  # ensures actual sending of response
+
+  print(f"conn with {clientAddr}: closed.")
+  writer.close()
+
+
 
 
 
@@ -89,6 +213,8 @@ for pwm in pwms.values():
 
 
 
+
+
 #e.g 65535 to 1 (return range = -1 to 1)
 def PWMToDecimal(pwm:int)->float:
   print('PWMToDecimal hasn\'t been tested yet')
@@ -96,9 +222,13 @@ def PWMToDecimal(pwm:int)->float:
 
 
 
+
+
 #e.g 1 to 65535 (return range = -65535 to 65535)
 def decimalToPWM(decimal:float)->int:
   return(min( max( int(decimal*65535), -65535), 65535))
+
+
 
 
 
@@ -116,7 +246,7 @@ async def transitionPMW(pin, newDuty:int=0, seconds:float=1, steps:int=1000)->No
     for duty in range (curDuty, newDuty, int(step)*dirMultiplier):
       pwms[pin].duty_u16(round(duty,0))
       pwmDuties[pin] = duty
-      await uasyncio.sleep(stepTime)
+      await asyncio.sleep(stepTime)
 
     # ensure new value is set
     pwms[pin].duty_u16(newDuty)
@@ -129,27 +259,33 @@ async def transitionPMW(pin, newDuty:int=0, seconds:float=1, steps:int=1000)->No
 
 
 
+
+
 # set tiko to move forward
 async def tikoForward()->None:
   tasks = [
-    uasyncio.create_task(transitionPMW(16, 65535, .25)),
-    uasyncio.create_task(transitionPMW(17, 00000, .25)),
-    uasyncio.create_task(transitionPMW(18, 65535, .25)),
-    uasyncio.create_task(transitionPMW(19, 00000, .25)),
+    asyncio.create_task(transitionPMW(16, 65535, .25)),
+    asyncio.create_task(transitionPMW(17, 00000, .25)),
+    asyncio.create_task(transitionPMW(18, 65535, .25)),
+    asyncio.create_task(transitionPMW(19, 00000, .25)),
   ]
-  await uasyncio.gather(*tasks)
+  await asyncio.gather(*tasks)
+
+
 
 
 
 # set tiko to move backward
 async def tikoReverse()->None:
   tasks = [
-    uasyncio.create_task(transitionPMW(16, 00000, .25)),
-    uasyncio.create_task(transitionPMW(17, 65535, .25)),
-    uasyncio.create_task(transitionPMW(18, 00000, .25)),
-    uasyncio.create_task(transitionPMW(19, 65535, .25)),
+    asyncio.create_task(transitionPMW(16, 00000, .25)),
+    asyncio.create_task(transitionPMW(17, 65535, .25)),
+    asyncio.create_task(transitionPMW(18, 00000, .25)),
+    asyncio.create_task(transitionPMW(19, 65535, .25)),
   ]
-  await uasyncio.gather(*tasks)
+  await asyncio.gather(*tasks)
+
+
 
 
 
@@ -160,23 +296,25 @@ async def tikoSetLeft(dir:int=0)->None:
   if pwmVal > 0:   
     # forward
     tasks = [
-      uasyncio.create_task(transitionPMW(18, pwmVal, .1)),
-      uasyncio.create_task(transitionPMW(19, 000000, .1)),
+      asyncio.create_task(transitionPMW(18, pwmVal, .1)),
+      asyncio.create_task(transitionPMW(19, 000000, .1)),
     ]
   elif pwmVal < 0: 
     # backward
     tasks = [
-      uasyncio.create_task(transitionPMW(18, 000000, .1)),
-      uasyncio.create_task(transitionPMW(19, pwmVal, .1)),
+      asyncio.create_task(transitionPMW(18, 000000, .1)),
+      asyncio.create_task(transitionPMW(19, pwmVal, .1)),
     ]
   else:   
     # stopped         
     tasks = [
-      uasyncio.create_task(transitionPMW(18, 0, .1)),
-      uasyncio.create_task(transitionPMW(19, 0, .1)),
+      asyncio.create_task(transitionPMW(18, 0, .1)),
+      asyncio.create_task(transitionPMW(19, 0, .1)),
     ]
 
-  await uasyncio.gather(*tasks)
+  await asyncio.gather(*tasks)
+
+
 
 
 
@@ -187,54 +325,105 @@ async def tikoSetRight(dir:int=0)->None:
   if pwmVal > 0:   
     # forward
     tasks = [
-      uasyncio.create_task(transitionPMW(16, pwmVal, .1)),
-      uasyncio.create_task(transitionPMW(17, 000000, .1)),
+      asyncio.create_task(transitionPMW(16, pwmVal, .1)),
+      asyncio.create_task(transitionPMW(17, 000000, .1)),
     ]
   elif pwmVal < 0: 
     # backward
     tasks = [
-      uasyncio.create_task(transitionPMW(16, 000000, .1)),
-      uasyncio.create_task(transitionPMW(17, pwmVal, .1)),
+      asyncio.create_task(transitionPMW(16, 000000, .1)),
+      asyncio.create_task(transitionPMW(17, pwmVal, .1)),
     ]
   else:   
     # stopped         
     tasks = [
-      uasyncio.create_task(transitionPMW(16, 0, .1)),
-      uasyncio.create_task(transitionPMW(17, 0, .1)),
+      asyncio.create_task(transitionPMW(16, 0, .1)),
+      asyncio.create_task(transitionPMW(17, 0, .1)),
     ]
 
-  await uasyncio.gather(*tasks)
+  await asyncio.gather(*tasks)
+
+
+
+
+
+
+async def startServer()->None:
+  """Initialize the server"""
+  global ip, port
+  #tasks:list = []
+  server = None
+
+  #indefinitely server on the socket
+  if ip != '0.0.0.0' and port != '0':
+    try:
+      #continue to run upon receiving request
+      server = await asyncio.start_server(handleRequest, ip, port)
+      print(f"Success! Serving on {ip}:{port}")
+
+      await server.wait_closed()  # run on server object itself
+    except Exception as err:
+      print(f"Error: Couldn't add {ip}:{port} to async listener. Server is not listening to this socket!: {str(err)}")
+      if server:
+        server.close()
+        await server.wait_closed()
+      pass
+    finally:
+      if server:
+        print(f"Closing err'd server {ip}:{port}")
+        server.close()
+        await server.wait_closed()
+        print(f"Closed err'd server")
+  else:
+    print(f"Skipped binding on {ip}:{port}")
+
+
 
 
 
 # main logic loop
-async def main():
+#async def main():
+#
+#  getConfig()
+#  connectToHotspot()
+#  conn = openSocket()
+#
+#  while True:
+#    client = conn.accept()[0]
+#    rqst = client.recv(1024)
+#    rqst = str(rqst)
+#    rqst = rqst.split()[1]
+#
+#    if rqst == '/left?':
+#      print(rqst)
+#      await tikoSetLeft(1)
+#      await asyncio.sleep(1)
+#      await tikoSetLeft(0)
+#      client.send('<p>Left</p>')
+#      
+#    elif rqst == '/right?':
+#      print(rqst)
+#      await tikoSetRight(1)
+#      await asyncio.sleep(1)
+#      await tikoSetRight(0)
+#      client.send('<p>Right</p>')
+#    
+#    client.close()
+#
+#
+#asyncio.run(main())
 
-  getConfig()
-  connectToHotspot()
-  conn = openSocket()
 
-  while True:
-    client = conn.accept()[0]
-    rqst = client.recv(1024)
-    rqst = str(rqst)
-    rqst = rqst.split()[1]
+if __name__ == "__main__":
+  getConfig(); print('\n')
+  while not wlan.isconnected():
+    connectToHotspot(); print('\n')
 
-    if rqst == '/left?':
-      print(rqst)
-      await tikoSetLeft(1)
-      await uasyncio.sleep(1)
-      await tikoSetLeft(0)
-      client.send('<p>Left</p>')
-      
-    elif rqst == '/right?':
-      print(rqst)
-      await tikoSetRight(1)
-      await uasyncio.sleep(1)
-      await tikoSetRight(0)
-      client.send('<p>Right</p>')
-    
-    client.close()
+  # ensure ip is correctly assigned
+  if wlan.isconnected() and ip == None:
+    ip = wlan.ifconfig()[0]
 
-
-uasyncio.run(main())
+ 
+  if wlan.isconnected():
+    setupSockets(); print('\n')
+    asyncio.run(startServer())
