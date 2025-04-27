@@ -109,7 +109,9 @@ def getContent()->str:
 
   path = request_headers['path']
   if path in ['', '/', '/home']:
-    content = 'home'
+    with open('home.html', 'r') as homePage:
+      for line in homePage:
+        content += str(line)
   else:
     content = f"not-home, is {path}"
   

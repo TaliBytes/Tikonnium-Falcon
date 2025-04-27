@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Tikonnium Falcon Controller</title>
+
+    <script>
+      window.addEventListener('load', (e) => {
+        // dynamically add "TIKONNIUM FALCON to stats screen"
+        stats = document.getElementById('statScreen');
+        stats.innerHTML = '';
+        const splashText = 'Tikonnium Falcon...';
+        let text = '';
+
+        for (let i=0; i < splashText.length; i++) {
+          setTimeout(function(){
+            text += splashText[i];
+            stats.innerHTML = text;
+          }, 125*i)
+
+          if (i+1 == splashText.length) {
+            setTimeout(function(){
+              stats.innerHTML = text + '<br/><br/>';
+            }, 125*(i+1))
+          }
+        }
+      });
+
+      function sendControl(control) {
+        if (control.value) {
+          // control sends a specific value
+          console.log(control.id, control.value);
+        } else if (!control.value) {
+          // button press
+          console.log(control.id);
+        }
+      }
+    </script>
+
+
+    <style>
+      * {margin:0; padding:0;}
+      html, body {width:100%; height:100dvh; overflow:hidden; box-sizing:border-box;}
+
+      /* POSITIONING */
+      #controller {position:relative; width:100%; height:100%;}
+      #viewer, #stats, #controls {position:absolute;}
+      /* #viewer {background-image:url('/home/talibytes/Projects/RaspiPico/tikonnium-falcon/IMG_6524.JPEG');background-size:cover; background-position: center; z-index:1; inset:0;} */
+      #stats {bottom:0; left:50%; transform:translateX(-50%); width:60%; height:34dvh; z-index:2;}
+      #controls {position:absolute; bottom:0; width:100%; height:34dvh; z-index:3;}
+
+      #control1, #control2 {position:absolute; bottom:0; width:20%; height:100%; color:white; text-align:center;}
+      #control1 {left:0;} #control2 {right:0;}
+
+      /* INDIVIDUAL STYLING */
+      #stats, #control1, #control2 {background:rgba(19, 31, 46, 0.5);}
+      #statScreen {width:calc(100%-18px); height:100%; background:#333; border:2px solid limegreen; padding:9px; border-radius:7px; color:limegreen; overflow-y:scroll;}
+
+
+      /* CONTROLS */
+      .throttleRange {}
+      .tikoBtn {}
+    </style>
+  </head>
+
+
+
+  <body>
+    <!-- contains everything -->
+    <div id="controller">
+      <!-- viewer will show camera view if a camera is ever added -->
+      <div id="viewer">&nbsp;</div>
+
+      <!-- stats shows import output from the bot -->
+      <div id="stats"><div id="statScreen">&nbsp;</div></div>
+
+      <!-- controls for the bot -->
+      <div id="controls">
+
+        <!-- left hand side controls -->
+        <div id="control1">
+          <button id="LB" onmousedown="sendControl(this)">LB</button>
+          <button id="LT" onmousedown="sendControl(this)">LT</button>
+          <button id="m1" onmousedown="sendControl(this)">M1</button>
+          <br/>
+          <input type="range" min="-100" max="100" value="0" class="throttleRange" id="lThrottle" oninput="sendControl(this)"/>
+          <button id="lUp" onmousedown="sendControl(this)">&uarr;</button>
+          <button id="lLeft" onmousedown="sendControl(this)">&larr;</button>
+          <button id="lRight" onmousedown="sendControl(this)">&rarr;</button>
+          <button id="lDown" onmousedown="sendControl(this)">&darr;</button>
+        </div>
+
+        <!-- right hand side controls -->
+        <div id="control2">
+          <button id="RB" onmousedown="sendControl(this)">RB</button>
+          <button id="RT" onmousedown="sendControl(this)">RT</button>
+          <button id="m2" onmousedown="sendControl(this)">M2</button>
+          <br/>
+          <input type="range" min="-100" max="100" value="0" class="throttleRange" id="rThrottle" oninput="sendControl(this)"/>
+          <button id="rUp" onmousedown="sendControl(this)">Y</button>
+          <button id="rLeft" onmousedown="sendControl(this)">X</button>
+          <button id="rRight" onmousedown="sendControl(this)">B</button>
+          <button id="rDown" onmousedown="sendControl(this)">A</button>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
