@@ -4,11 +4,14 @@ import network, socket
 
 #micro-controller
 import asyncio
-from machine import Pin, PWM
 import time
+from machine import Pin, PWM, I2C
+from lcd_api import LcdApi
+from pico_i2c_lcd import I2cLcd
 
 
 #GLOBAL VARIABLES
+# wifi settings
 ssidName:str|None = None
 ssidPwd :str|None = None
 ip:str|None = None
@@ -16,6 +19,13 @@ port:int = 9000
 wlan = network.WLAN(network.STA_IF)
 wlan.active(True)
 
+# display settings
+I2C_ADDR:int = 60
+I2C_ROWS:int = 4
+I2C_COLS:int = 8
+lcd = None
+
+# server settings
 request_headers:dict = {}     # client's request headers
 response_headers:dict = {}    # server's response headers
 response_content:str = ''     # content returned by server
@@ -25,10 +35,11 @@ sockets:list = []             # hosts/ports to bind to  (except Tiko only gets o
 
 
 
-# IMPORT WIFI CONFIGURATION ... 
+# IMPORT CONFIGURATION ... 
 def getConfig()->None:
-  global ssidName, ssidPwd
+  global ssidName, ssidPwd, lcd
 
+  # connect to wifi
   try:
     with open('config.config', 'r') as config:
 
@@ -42,9 +53,12 @@ def getConfig()->None:
 
           if setting == "ssidName": ssidName = value
           if setting == "ssidPwd": ssidPwd = value
-
   except Exception as err:
     print('Fatal Error: config.config error ... ' + str(err))
+
+  # config i2c display
+  i2c = I2C(0, sda=Pin(0), scl=Pin(1), freq=400000)
+  lcd = I2cLcd(i2c, I2C_ADDR, I2C_ROWS, I2C_COLS)
 
 
 
@@ -383,39 +397,6 @@ async def startServer()->None:
 
 
 
-# main logic loop
-#async def main():
-#
-#  getConfig()
-#  connectToHotspot()
-#  conn = openSocket()
-#
-#  while True:
-#    client = conn.accept()[0]
-#    rqst = client.recv(1024)
-#    rqst = str(rqst)
-#    rqst = rqst.split()[1]
-#
-#    if rqst == '/left?':
-#      print(rqst)
-#      await tikoSetLeft(1)
-#      await asyncio.sleep(1)
-#      await tikoSetLeft(0)
-#      client.send('<p>Left</p>')
-#      
-#    elif rqst == '/right?':
-#      print(rqst)
-#      await tikoSetRight(1)
-#      await asyncio.sleep(1)
-#      await tikoSetRight(0)
-#      client.send('<p>Right</p>')
-#    
-#    client.close()
-#
-#
-#asyncio.run(main())
-
-
 if __name__ == "__main__":
   getConfig(); print('\n')
   while not wlan.isconnected():
@@ -425,7 +406,14 @@ if __name__ == "__main__":
   if wlan.isconnected() and ip == None:
     ip = wlan.ifconfig()[0]
 
- 
   if wlan.isconnected():
     setupSockets(); print('\n')
+
+    # print initial screen
+    if lcd is not None:
+      lcd.clear()
+      lcd.move_to(5,0)
+      lcd.putstr('Welcome!')
+      lcd.move_to(3,1)
+
     asyncio.run(startServer())

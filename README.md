@@ -18,6 +18,10 @@ I also want to achieve the following personal goals:
 - Learn the basics of Micro Controllers (via Micro-Python)
 - Learn the basics of electronics hardware/prototyping (eg breadboarding, etc)
 
+## Additional Information
+
+This project uses [RPI-PICO-I2C-LCD project](https://github.com/T-622/RPI-PICO-I2C-LCD) files (lcd_api, pico_ic2_lcd), by [Tyler Peppy](https://github.com/T-622/).
+
 ## PROJECT STATUS
 
 This project is currently incomplete but being worked on here and there as I have time.
