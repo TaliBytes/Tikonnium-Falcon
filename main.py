@@ -4,6 +4,8 @@ import network, socket
 
 #micro-controller
 import asyncio
+from machine import Pin, PWM, I2C
+import ssd1306 as disp
 import time
 from machine import Pin, PWM, I2C
 from lcd_api import LcdApi
@@ -19,13 +21,8 @@ port:int = 9000
 wlan = network.WLAN(network.STA_IF)
 wlan.active(True)
 
-# display settings
-I2C_ADDR:int = 60
-I2C_ROWS:int = 4
-I2C_COLS:int = 8
-lcd = None
+oled = None                   # oled I2C display
 
-# server settings
 request_headers:dict = {}     # client's request headers
 response_headers:dict = {}    # server's response headers
 response_content:str = ''     # content returned by server
@@ -37,9 +34,9 @@ sockets:list = []             # hosts/ports to bind to  (except Tiko only gets o
 
 # IMPORT CONFIGURATION ... 
 def getConfig()->None:
-  global ssidName, ssidPwd, lcd
+  global ssidName, ssidPwd, oled
 
-  # connect to wifi
+  # wifi config
   try:
     with open('config.config', 'r') as config:
 
@@ -56,9 +53,10 @@ def getConfig()->None:
   except Exception as err:
     print('Fatal Error: config.config error ... ' + str(err))
 
-  # config i2c display
+  # I2C Disp config
   i2c = I2C(0, sda=Pin(0), scl=Pin(1), freq=400000)
-  lcd = I2cLcd(i2c, I2C_ADDR, I2C_ROWS, I2C_COLS)
+  oled = disp.SSD1306_I2C(128,64,i2c)
+
 
 
 
@@ -222,7 +220,7 @@ pwms = {p: PWM(Pin(p)) for p in pins}
 pwmDuties = {p: 0 for p in pins}
 
 # set start point for each pwm pin
-print(f"Turned off each motor PWM pin and set frequency to 25MHz")
+#print(f"Turned off each motor PWM pin and set frequency to 25MHz")
 for pwm in pwms.values():
   pwm.duty_u16(0)
   pwm.freq(25000)
@@ -409,11 +407,19 @@ if __name__ == "__main__":
   if wlan.isconnected():
     setupSockets(); print('\n')
 
-    # print initial screen
-    if lcd is not None:
-      lcd.clear()
-      lcd.move_to(5,0)
-      lcd.putstr('Welcome!')
-      lcd.move_to(3,1)
-
+    if oled is not None:
+      oled.fill(0)
+      oled.text('Tikonnium',28,16)
+      oled.text('Falcon',40,24)
+      oled.show()
+      time.sleep(10)
+      oled.fill(0)
+      oled.text('host: tiko', 0, 0)
+      oled.text('pass: falcon', 0, 8)
+      oled.text(f'site', 0, 24)
+      oled.text(str(ip), 8, 32)
+      oled.text('port: 9000', 0, 40)
+      oled.show()
+    else:
+      print('OLED display was not found')
     asyncio.run(startServer())

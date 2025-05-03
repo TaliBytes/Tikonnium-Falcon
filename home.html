@@ -29,22 +29,12 @@
         if (control.value) {
           // control sends a specific value
           console.log(control.id, control.value);
-
         } else if (!control.value) {
           // button press
           console.log(control.id);
         }
       }
-
-      // set value to 0 throttle if it is near 0
-      function resetThrottle(control){
-        if (control.value < 22 && control.value > -22) {
-          control.value = 0;
-          console.log(control.id, control.value);
-        }
-      }
     </script>
-
 
 
     <style>
@@ -67,37 +57,8 @@
 
 
       /* CONTROLS */
-      .controlTable {
-        display:table; width:96%; height:90%; margin:auto; margin-top:5%; border-collapse:collapse; overflow:hidden;
-
-        & tbody {height:100%;}
-        & tr th, & tr td {padding:3px; width:84px;}
-      }
-      .throttleRange {
-        position:relative; writing-mode:vertical-lr;
-        width:17px; height:30%;
-        appearance:none; border-radius:999px;
-        background:#ffffff; outline:none; opacity:0.7;
-        transition: opacity .2s; &:hover {opacity:1;}
-        transform:rotate(180deg); /*  so up is increased throttle and down is decreased  */
-
-        /* slider position styles */
-        &::-moz-range-thumb, &::-webkit-slider-thumb {
-          width:45px; height:45px;
-          cursor:pointer; border-radius:999px;
-          
-        }
-        &#lThrottle {&::-moz-range-thumb, &::-webkit-slider-thumb {background-color:#04AA6D;}}
-        &#rThrottle {&::-moz-range-thumb, &::-webkit-slider-thumb {background-color:#d8c200;}}
-      }
-      
-      .tikoBtn {
-        display:block; width:100%; max-width:84px; margin:auto; height:100%; max-height:84px;
-        border-radius:999px; font-weight:bold; font-size:2rem; opacity:.7;
-        color:#2d2f33; background:#fff;
-        transition: opacity .2s;
-        &:hover {opacity:1;}
-      }
+      .throttleRange {}
+      .tikoBtn {}
     </style>
   </head>
 
@@ -117,60 +78,28 @@
 
         <!-- left hand side controls -->
         <div id="control1">
-          <table class="controlTable">
-            <tbody>
-              <tr style="height:13%;">
-                <td rowspan="4" style="width:17%;"><input type="range" min="-100" max="100" value="0" class="throttleRange" id="lThrottle" onchange="resetThrottle(this)" oninput="sendControl(this)"/></td>
-                <td><button style="color:#6500d8;" class="tikoBtn" id="lB" onmousedown="sendControl(this)">LB</button></td>
-                <td><button style="color:#6500d8;" class="tikoBtn" id="lT" onmousedown="sendControl(this)">LT</button></td>
-                <td><button style="color:#6500d8;" class="tikoBtn" id="m1" onmousedown="sendControl(this)">M1</button></td>
-              </tr>
-              <tr style="height:29%;">
-                <td>&nbsp;</td>
-                <td><button class="tikoBtn" id="lUp" onmousedown="sendControl(this)">&uarr;</button></td>
-                <td>&nbsp;</td>
-              </tr>
-              <tr style="height:29%;">
-                <td><button class="tikoBtn" id="lLeft" onmousedown="sendControl(this)">&larr;</button></td>
-                <td>&nbsp;</td>
-                <td><button class="tikoBtn" id="lRight" onmousedown="sendControl(this)">&rarr;</button></td>
-              </tr>
-              <tr style="height:29%;">
-                <td>&nbsp;</td>
-                <td><button class="tikoBtn" id="lDown" onmousedown="sendControl(this)">&darr;</button></td>
-                <td>&nbsp;</td>
-              </tr>
-            </tbody>
-          </table>
+          <button id="LB" onmousedown="sendControl(this)">LB</button>
+          <button id="LT" onmousedown="sendControl(this)">LT</button>
+          <button id="m1" onmousedown="sendControl(this)">M1</button>
+          <br/>
+          <input type="range" min="-100" max="100" value="0" class="throttleRange" id="lThrottle" oninput="sendControl(this)"/>
+          <button id="lUp" onmousedown="sendControl(this)">&uarr;</button>
+          <button id="lLeft" onmousedown="sendControl(this)">&larr;</button>
+          <button id="lRight" onmousedown="sendControl(this)">&rarr;</button>
+          <button id="lDown" onmousedown="sendControl(this)">&darr;</button>
         </div>
 
         <!-- right hand side controls -->
         <div id="control2">
-          <table class="controlTable">
-            <tbody>
-              <tr style="height:13%;">
-                <td><button style="color:#6500d8;" class="tikoBtn" id="m2" onmousedown="sendControl(this)">M2</button></td>
-                <td><button style="color:#6500d8;" class="tikoBtn" id="rt" onmousedown="sendControl(this)">RT</button></td>
-                <td><button style="color:#6500d8;" class="tikoBtn" id="rB" onmousedown="sendControl(this)">RB</button></td>
-                <td rowspan="4" style="width:17%;"><input type="range" min="-100" max="100" value="0" class="throttleRange" id="rThrottle" onchange="resetThrottle(this)" oninput="sendControl(this)"/></td>
-              </tr>
-              <tr style="height:29%;">
-                <td>&nbsp;</td>
-                <td><button class="tikoBtn" id="rUp" onmousedown="sendControl(this)">X</button></td>
-                <td>&nbsp;</td>
-              </tr>
-              <tr style="height:29%;">
-                <td><button class="tikoBtn" id="rLeft" onmousedown="sendControl(this)">Y</button></td>
-                <td>&nbsp;</td>
-                <td><button style="color:#04AA6D;"class="tikoBtn" id="rRight" onmousedown="sendControl(this)">A</button></td>
-              </tr>
-              <tr style="height:29%;">
-                <td>&nbsp;</td>
-                <td><button style="color:#b30101;" class="tikoBtn" id="rDown" onmousedown="sendControl(this)">B</button></td>
-                <td>&nbsp;</td>
-              </tr>
-            </tbody>
-          </table>
+          <button id="RB" onmousedown="sendControl(this)">RB</button>
+          <button id="RT" onmousedown="sendControl(this)">RT</button>
+          <button id="m2" onmousedown="sendControl(this)">M2</button>
+          <br/>
+          <input type="range" min="-100" max="100" value="0" class="throttleRange" id="rThrottle" oninput="sendControl(this)"/>
+          <button id="rUp" onmousedown="sendControl(this)">Y</button>
+          <button id="rLeft" onmousedown="sendControl(this)">X</button>
+          <button id="rRight" onmousedown="sendControl(this)">B</button>
+          <button id="rDown" onmousedown="sendControl(this)">A</button>
         </div>
       </div>
     </div>
