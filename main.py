@@ -4,7 +4,8 @@ import network, socket
 
 #micro-controller
 import asyncio
-from machine import Pin, PWM
+from machine import Pin, PWM, I2C
+import ssd1306 as disp
 import time
 
 
@@ -16,6 +17,8 @@ port:int = 9000
 wlan = network.WLAN(network.STA_IF)
 wlan.active(True)
 
+oled = None                   # oled I2C display
+
 request_headers:dict = {}     # client's request headers
 response_headers:dict = {}    # server's response headers
 response_content:str = ''     # content returned by server
@@ -25,10 +28,11 @@ sockets:list = []             # hosts/ports to bind to  (except Tiko only gets o
 
 
 
-# IMPORT WIFI CONFIGURATION ... 
+# IMPORT CONFIGURATION ... 
 def getConfig()->None:
-  global ssidName, ssidPwd
+  global ssidName, ssidPwd, oled
 
+  # wifi config
   try:
     with open('config.config', 'r') as config:
 
@@ -42,9 +46,13 @@ def getConfig()->None:
 
           if setting == "ssidName": ssidName = value
           if setting == "ssidPwd": ssidPwd = value
-
   except Exception as err:
     print('Fatal Error: config.config error ... ' + str(err))
+
+  # I2C Disp config
+  i2c = I2C(0, sda=Pin(0), scl=Pin(1), freq=400000)
+  oled = disp.SSD1306_I2C(128,64,i2c)
+
 
 
 
@@ -208,7 +216,7 @@ pwms = {p: PWM(Pin(p)) for p in pins}
 pwmDuties = {p: 0 for p in pins}
 
 # set start point for each pwm pin
-print(f"Turned off each motor PWM pin and set frequency to 25MHz")
+#print(f"Turned off each motor PWM pin and set frequency to 25MHz")
 for pwm in pwms.values():
   pwm.duty_u16(0)
   pwm.freq(25000)
@@ -383,39 +391,6 @@ async def startServer()->None:
 
 
 
-# main logic loop
-#async def main():
-#
-#  getConfig()
-#  connectToHotspot()
-#  conn = openSocket()
-#
-#  while True:
-#    client = conn.accept()[0]
-#    rqst = client.recv(1024)
-#    rqst = str(rqst)
-#    rqst = rqst.split()[1]
-#
-#    if rqst == '/left?':
-#      print(rqst)
-#      await tikoSetLeft(1)
-#      await asyncio.sleep(1)
-#      await tikoSetLeft(0)
-#      client.send('<p>Left</p>')
-#      
-#    elif rqst == '/right?':
-#      print(rqst)
-#      await tikoSetRight(1)
-#      await asyncio.sleep(1)
-#      await tikoSetRight(0)
-#      client.send('<p>Right</p>')
-#    
-#    client.close()
-#
-#
-#asyncio.run(main())
-
-
 if __name__ == "__main__":
   getConfig(); print('\n')
   while not wlan.isconnected():
@@ -428,4 +403,20 @@ if __name__ == "__main__":
  
   if wlan.isconnected():
     setupSockets(); print('\n')
+
+    if oled is not None:
+      oled.fill(0)
+      oled.text('Tikonnium',28,16)
+      oled.text('Falcon',40,24)
+      oled.show()
+      time.sleep(10)
+      oled.fill(0)
+      oled.text('host: tiko', 0, 0)
+      oled.text('pass: falcon', 0, 8)
+      oled.text(f'site', 0, 24)
+      oled.text(str(ip), 8, 32)
+      oled.text('port: 9000', 0, 40)
+      oled.show()
+    else:
+      print('OLED display was not found')
     asyncio.run(startServer())
