@@ -8,8 +8,6 @@ from machine import Pin, PWM, I2C
 import ssd1306 as disp
 import time
 from machine import Pin, PWM, I2C
-from lcd_api import LcdApi
-from pico_i2c_lcd import I2cLcd
 
 
 #GLOBAL VARIABLES
@@ -397,6 +395,16 @@ async def startServer()->None:
 
 if __name__ == "__main__":
   getConfig(); print('\n')
+
+  # welcome splash
+  if oled is not None:
+    oled.fill(0)
+    oled.text('Tikonnium',28,16)
+    oled.text('Falcon',40,24)
+    oled.show()
+  else:
+    print('OLED display was not found')
+
   while not wlan.isconnected():
     connectToHotspot(); print('\n')
 
@@ -407,12 +415,8 @@ if __name__ == "__main__":
   if wlan.isconnected():
     setupSockets(); print('\n')
 
+    # information screen
     if oled is not None:
-      oled.fill(0)
-      oled.text('Tikonnium',28,16)
-      oled.text('Falcon',40,24)
-      oled.show()
-      time.sleep(10)
       oled.fill(0)
       oled.text('host: tiko', 0, 0)
       oled.text('pass: falcon', 0, 8)
@@ -420,6 +424,5 @@ if __name__ == "__main__":
       oled.text(str(ip), 8, 32)
       oled.text('port: 9000', 0, 40)
       oled.show()
-    else:
-      print('OLED display was not found')
+     
     asyncio.run(startServer())
