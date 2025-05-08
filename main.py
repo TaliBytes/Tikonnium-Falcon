@@ -347,8 +347,8 @@ def getContent()->str:
     except Exception as err:
       content = f'<p>Could not find home page. Err: {err}</p>'
     finally: 
-      response_headers['contentType', 'text/html; charset="UTF-8"']
-  if path == '/favicon.ico':
+      response_headers['contentType'] = 'text/html; charset="UTF-8"'
+  elif path in ['favicon.ico', '/favicon.ico']:
     print('favicon.ico file exists but returning files to client is not yet supported')
   else:
     content = f"not-home, is {path}"
