@@ -7,7 +7,6 @@ import asyncio
 from machine import Pin, PWM, I2C
 import ssd1306 as disp
 import time
-from machine import Pin, PWM, I2C
 
 
 #GLOBAL VARIABLES
@@ -15,210 +14,23 @@ from machine import Pin, PWM, I2C
 ssidName:str|None = None
 ssidPwd :str|None = None
 ip:str|None = None
-port:int = 9000
-wlan = network.WLAN(network.STA_IF)
-wlan.active(True)
-
-oled = None                   # oled I2C display
+port = 80
 
 request_headers:dict = {}     # client's request headers
 response_headers:dict = {}    # server's response headers
 response_content:str = ''     # content returned by server
-sockets:list = []             # hosts/ports to bind to  (except Tiko only gets one)
 
+# I2C Display Configuration
+i2c = I2C(0, sda=Pin(0), scl=Pin(1), freq=400000)
+oled = disp.SSD1306_I2C(128,64,i2c)
 
-
-
-
-# IMPORT CONFIGURATION ... 
-def getConfig()->None:
-  global ssidName, ssidPwd, oled
-
-  # wifi config
-  try:
-    with open('config.config', 'r') as config:
-
-      for line in config:
-        line:str = line.strip()
-        if not line or line.startswith('#'): continue
-        if '=' in line:
-          setting, value = line.split('=', 1)
-          setting = setting.strip()
-          value = value.strip()
-
-          if setting == "ssidName": ssidName = value
-          if setting == "ssidPwd": ssidPwd = value
-  except Exception as err:
-    print('Fatal Error: config.config error ... ' + str(err))
-
-  # I2C Disp config
-  i2c = I2C(0, sda=Pin(0), scl=Pin(1), freq=400000)
-  oled = disp.SSD1306_I2C(128,64,i2c)
-
-
-
-
-
-
-# Connect to the hotspot
-def connectToHotspot()->None:
-  global ssidName, ssidPwd, wlan, ip
-
-  if ssidName != None and ssidPwd != None:
-    s:int=0 #number of secs attempting connection
-    timeout:int=10
-    wlan.connect(ssidName, ssidPwd)
-
-    while not wlan.isconnected() and s <= timeout:
-      print(f"Connecting to {ssidName}... {s}s")
-      s+=1
-      time.sleep(1)
-
-    if wlan.isconnected():
-      print(f"Connected to {ssidName}!, Config:, {wlan.ifconfig()}")
-      ip = wlan.ifconfig()[0]
-    else:
-      print(f"Could not connect to. Check credentials and signal strength.")
-  
-  else:
-    print('Missing ssidName or ssidPwd')
-
-
-
-
-
-# Listen on sockets
-def setupSockets()->None:
-  """Configure socket to listen on"""
-  global sockets, ip, port
-
-  aSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-  aSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-  sockets.append(aSocket)
-
-  # bind socket to port
-  try:
-    aSocket.bind((ip, port))
-    aSocket.listen(5) # max connections
-    print(f"Configured socket binding for {ip}:{port}")
-  except Exception as err:
-    print(f"Couldn't configure socket binding for {ip}:{port} ... Error: {str(err)}")
-    aSocket.close() # close on err
-    return None
-
-  aSocket.close() # close when done
-
-
-
-
-
-def getContent()->str:
-  """Returns HTML based on request headers"""
-  global request_headers
-  content:str = ''
-
-  path = request_headers['path']
-  if path in ['', '/', '/home']:
-    with open('home.html', 'r') as homePage:
-      for line in homePage:
-        content += str(line)
-  else:
-    content = f"not-home, is {path}"
-  
-  return(content)
-
-
-
-
-
-def parseRequest(request:str)->None:
-  global request_headers
-  request_headers = {}
-
-  request = str(request)
-  lines:list = request.split("\r\n")
-
-  rqstLine:str = lines[0]
-  method, path, protocol = rqstLine.split(' ')
-  request_headers['method'] = method
-  request_headers['path'] = path
-  request_headers['protocol'] = protocol
-  #request_headers['date'] = datetime.datetime.now().strftime("%a, $d %b %Y %H:%M:00 MST")
-
-  for line in lines[1:]:
-    if line == "":
-      break
-      
-    key, value = line.split(":", 1)
-    request_headers[key.strip()] = value.strip()
-
-
-
-
-
-def constructResponse()->bytes:
-  """Setup initial headers, get desired response, send it"""
-  global response_headers
-  global response_content
-
-  response_content = getContent()
-
-  response_headers.setdefault('statusCode', 200)
-  response_headers.setdefault('statusMessage', 'OK')
-  response_headers.setdefault('contentType', 'text/html; charset="UTF-8"')
-  response_headers.setdefault('connection', 'close')
-
-  # construct response header
-  headers =  f"HTTP/1.1 {response_headers['statusCode']} {response_headers['statusMessage']}\r\n"
-  headers += f"Content-Length: {len(response_content.encode('utf-8'))}\r\n"
-  headers += f"Connection: {response_headers['connection']}\r\n"  
-  headers += f"Content-Type: {response_headers['contentType']}\r\n"
-  #headers += f"Date: {datetime.datetime.now().strftime('%a, %d %b %Y %H:%M:00 MST')}\r\n"
-
-  headers += f"\r\n"  #marks end of headers, start of body
-
-  headersEncoded = headers.encode('utf-8')
-  contentEncoded = response_content.encode('utf-8')
-
-  response = headersEncoded + contentEncoded
-  return(response)
-
-
-
-
-
-async def handleRequest(reader, writer)->None:
-  """Handle a clietn request"""
-  request = await reader.read(1024)
-  clientAddr = writer.get_extra_info('peername')
-
-  if len(request) > 0:
-    parseRequest(request.decode('utf-8'))
-    print(f"\nconn with {clientAddr}: requested {request_headers['path']}")
-
-    response = constructResponse()
-    writer.write(response)
-    print(f"conn withh {clientAddr}: sent response")
-    await writer.drain()  # ensures actual sending of response
-
-  print(f"conn with {clientAddr}: closed.")
-  writer.close()
-
-
-
-
-
-# 16 MotorR forward
-# 17 MotorR backward
-# 18 motorL forward
-# 19 MotorL backward
+""" #16 MotorR forward ... #17 MotorR backward ... #18 motorL forward ... #19 MotorL backward """
 # PMW range for each is 0-65535
 pins = [16,17,18,19]
 pwms = {p: PWM(Pin(p)) for p in pins}
 pwmDuties = {p: 0 for p in pins}
 
 # set start point for each pwm pin
-#print(f"Turned off each motor PWM pin and set frequency to 25MHz")
 for pwm in pwms.values():
   pwm.duty_u16(0)
   pwm.freq(25000)
@@ -359,6 +171,55 @@ async def tikoSetRight(dir:int=0)->None:
 
 
 
+def getConfig()->None:
+  """import data for access point configuration"""
+  global ssidName, ssidPwd, port
+
+  # wifi config
+  try:
+    with open('config.config', 'r') as config:
+
+      for line in config:
+        line:str = line.strip()
+        if not line or line.startswith('#'): continue
+        if '=' in line:
+          setting, value = line.split('=', 1)
+          setting = setting.strip()
+          value = value.strip()
+
+          if setting == "ssidName": ssidName = value
+          elif setting == "ssidPwd": ssidPwd = value
+          elif setting == "port": port = int(value)
+          else: print(f'Unknown setting... {setting} : {value}')
+  except Exception as err:
+    print('Fatal Error: config.config error ... ' + str(err))
+
+
+
+
+
+def setupSocket()->None:
+  """Configure socket(s) to listen on"""
+  global ip, port
+
+  aSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+  aSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+  # bind socket to port
+  try:
+    aSocket.bind((str(ip), int(port)))
+    aSocket.listen(5) # max connections
+    print(f"Configured socket binding for {ip}:{port}")
+  except Exception as err:
+    print(f"Couldn't configure socket binding for {ip}:{port} ... Error: {str(err)}")
+    aSocket.close() # close on err
+    return None
+
+  aSocket.close() # close when done
+
+
+
+
 
 async def startServer()->None:
   """Initialize the server"""
@@ -372,20 +233,22 @@ async def startServer()->None:
       #continue to run upon receiving request
       server = await asyncio.start_server(handleRequest, ip, port)
       print(f"Success! Serving on {ip}:{port}")
+      await server.wait_closed()
 
-      await server.wait_closed()  # run on server object itself
     except Exception as err:
       print(f"Error: Couldn't add {ip}:{port} to async listener. Server is not listening to this socket!: {str(err)}")
       if server:
         server.close()
         await server.wait_closed()
       pass
+
     finally:
       if server:
         print(f"Closing err'd server {ip}:{port}")
         server.close()
         await server.wait_closed()
         print(f"Closed err'd server")
+
   else:
     print(f"Skipped binding on {ip}:{port}")
 
@@ -393,36 +256,147 @@ async def startServer()->None:
 
 
 
-if __name__ == "__main__":
-  getConfig(); print('\n')
+async def handleRequest(reader, writer)->None:
+  """Entry point for handling a client request"""
+  request = await reader.read(1024)
+  clientAddr = writer.get_extra_info('peername')
 
+  if len(request) > 0:
+    parseRequest(request.decode('utf-8')) # parse request into usable data
+    print(f"\nconn with {clientAddr}: requested {request_headers['path']}")
+
+    response = constructResponse()        # respond to request by building response
+    writer.write(response)
+    print(f"conn withh {clientAddr}: sent response")
+    await writer.drain()  # ensures actual sending of response
+
+  print(f"conn with {clientAddr}: closed.")
+  writer.close()
+
+
+
+
+
+def parseRequest(request:str)->None:
+  """parses a client request into usable data before using said data to create a response"""
+  global request_headers
+  request_headers = {}
+
+  request = str(request)
+  lines:list = request.split("\r\n")
+
+  rqstLine:str = lines[0]
+  method, path, protocol = rqstLine.split(' ')
+  request_headers['method'] = method
+  request_headers['path'] = path
+  request_headers['protocol'] = protocol
+  #request_headers['date'] = datetime.datetime.now().strftime("%a, $d %b %Y %H:%M:00 MST")
+
+  for line in lines[1:]:
+    if line == "":
+      break
+      
+    key, value = line.split(":", 1)
+    request_headers[key.strip()] = value.strip()
+
+
+
+
+
+def constructResponse()->bytes:
+  """Setup initial headers, get desired response, send it"""
+  global response_headers, response_content
+
+  response_content = getContent() # get/generate content based on request data
+
+  response_headers.setdefault('statusCode', 200)
+  response_headers.setdefault('statusMessage', 'OK')
+  response_headers.setdefault('contentType', 'text/html; charset="UTF-8"')
+  response_headers.setdefault('connection', 'close')
+
+  # construct response header
+  headers =  f"HTTP/1.1 {response_headers['statusCode']} {response_headers['statusMessage']}\r\n"
+  headers += f"Content-Length: {len(response_content.encode('utf-8'))}\r\n"
+  headers += f"Connection: {response_headers['connection']}\r\n"  
+  headers += f"Content-Type: {response_headers['contentType']}\r\n"
+  #headers += f"Date: {datetime.datetime.now().strftime('%a, %d %b %Y %H:%M:00 MST')}\r\n"
+
+  headers += f"\r\n"  #marks end of headers, start of body
+
+  headersEncoded = headers.encode('utf-8')
+  contentEncoded = response_content.encode('utf-8')
+
+  response = headersEncoded + contentEncoded
+  return(response)
+
+
+
+
+
+def getContent()->str:
+  """Returns HTML based on request headers"""
+  global request_headers, response_headers
+  content:str = ''
+
+  path = request_headers['path']
+  if path in ['', '/', '/home']:
+    try:
+      with open('home.html', 'r') as homePage:
+        for line in homePage:
+          content += str(line)
+    except Exception as err:
+      content = f'<p>Could not find home page. Err: {err}</p>'
+    finally: 
+      response_headers['contentType', 'text/html; charset="UTF-8"']
+  if path == '/favicon.ico':
+    print('favicon.ico file exists but returning files to client is not yet supported')
+  else:
+    content = f"not-home, is {path}"
+  
+  return(content)
+
+
+
+
+
+if __name__ == "__main__":
   # welcome splash
   if oled is not None:
     oled.fill(0)
-    oled.text('Tikonnium',28,16)
-    oled.text('Falcon',40,24)
+    oled.text('TIKONNIUM',28,16)
+    oled.text('FALCON',40,24)
     oled.show()
   else:
     print('OLED display was not found')
 
-  while not wlan.isconnected():
-    connectToHotspot(); print('\n')
+  # get wifi config settings
+  getConfig()
+  ap = network.WLAN(network.AP_IF)
+  ap.active(False)  # clean up old network
+  time.sleep(1)
+  ap.config(ssid=str(ssidName), password=str(ssidPwd))
+  ap.active(True)
 
-  # ensure ip is correctly assigned
-  if wlan.isconnected() and ip == None:
-    ip = wlan.ifconfig()[0]
+  counter = 1 # start at 1 since it sleeps for 1 second during cleanup
+  while not ap.active():
+    print('Configuring access point...')
+    counter += 1
+    time.sleep(1)
+  print("Access point configured!")
 
-  if wlan.isconnected():
-    setupSockets(); print('\n')
+  # guarantee splash screen shows for at least 5 seconds
+  time.sleep(min(5-counter,0))  
 
-    # information screen
-    if oled is not None:
-      oled.fill(0)
-      oled.text('host: tiko', 0, 0)
-      oled.text('pass: falcon', 0, 8)
-      oled.text(f'site', 0, 24)
-      oled.text(str(ip), 8, 32)
-      oled.text('port: 9000', 0, 40)
-      oled.show()
-     
-    asyncio.run(startServer())
+  ip = ap.ifconfig()[0]
+  setupSocket()
+
+  # stats screen
+  if oled is not None:
+    oled.fill(0)
+    oled.text(f'host: {ssidName}', 0, 8)
+    oled.text(f'pwd: {ssidPwd}', 0, 16)
+    oled.text(f'website:', 0, 32)
+    oled.text(str(ip), 8, 40)
+    oled.show()
+   
+  asyncio.run(startServer())
