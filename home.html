@@ -25,16 +25,57 @@
         }
       });
 
-      function sendControl(control) {
-        if (control.value) {
-          // control sends a specific value
-          console.log(control.id, control.value);
+      ['change', 'click'].forEach(eventType => {
+        document.addEventListener(eventType, function(event) {
+          // has to be a sendControl element and ignore clicks on range (throttle)
+          if (!event.target.matches('.sendControl')) return;
+          if (eventType == 'click' && event.target.matches('input[type="range"]')) return;
 
-        } else if (!control.value) {
-          // button press
-          console.log(control.id);
+          // passed the checks, send the control to tiko
+          sendControl(event);
+        });
+      });
+
+      window.sendControl=sendControl;
+      function sendControl(e) {
+        const target = e.target;
+        const targetID = target.id;
+        const targetValue = target.value;
+        const targetTag = target.tagName;
+        const targetType = target.type;
+        let send_data;
+
+        send_data += '&targetID=' + targetID;
+        //if (targetTag.toLowerCase() == 'button') {}                                         //unique values just for buttons
+        if (targetTag.toLowerCase() == 'input' && targetType.toLowerCase() == 'range') {     // unique values just for range input
+          send_data += '&targetValue=' + targetValue;
         }
+
+        let options = {
+          url: document.url,
+          success:showResponse,
+          type: 'post',
+          resetForm:true,
+          data:send_data
+        };
+
+        fetch('/command', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/x-www-form-urlencoded',},
+          body: send_data.toString(),
+        })
+        .then(response => response.text())
+        .then(showResponse)
+        .catch(error => console.error('Error:', error));
+        return false;
       }
+
+
+      window.showResponse = showResponse;
+      function showResponse(e) {
+        console.log('showResponse:', e);
+      }
+
 
       // set value to 0 throttle if it is near 0
       function resetThrottle(control){
@@ -120,24 +161,24 @@
           <table class="controlTable">
             <tbody>
               <tr style="height:13%;">
-                <td rowspan="4" style="width:17%;"><input type="range" min="-100" max="100" value="0" class="throttleRange" id="lThrottle" onchange="resetThrottle(this)" oninput="sendControl(this)"/></td>
-                <td><button style="color:#6500d8;" class="tikoBtn" id="lB" onmousedown="sendControl(this)">LB</button></td>
-                <td><button style="color:#6500d8;" class="tikoBtn" id="lT" onmousedown="sendControl(this)">LT</button></td>
-                <td><button style="color:#6500d8;" class="tikoBtn" id="m1" onmousedown="sendControl(this)">M1</button></td>
+                <td rowspan="4" style="width:17%;"><input type="range" min="-100" max="100" value="0" class="throttleRange sendControl" id="lThrottle" onchange="resetThrottle(this)"/></td>
+                <td><button style="color:#6500d8;" class="tikoBtn sendControl" id="lB">LB</button></td>
+                <td><button style="color:#6500d8;" class="tikoBtn sendControl" id="lT">LT</button></td>
+                <td><button style="color:#6500d8;" class="tikoBtn sendControl" id="m1">M1</button></td>
               </tr>
               <tr style="height:29%;">
                 <td>&nbsp;</td>
-                <td><button class="tikoBtn" id="lUp" onmousedown="sendControl(this)">&uarr;</button></td>
+                <td><button class="tikoBtn sendControl" id="lUp">&uarr;</button></td>
                 <td>&nbsp;</td>
               </tr>
               <tr style="height:29%;">
-                <td><button class="tikoBtn" id="lLeft" onmousedown="sendControl(this)">&larr;</button></td>
+                <td><button class="tikoBtn sendControl" id="lLeft">&larr;</button></td>
                 <td>&nbsp;</td>
-                <td><button class="tikoBtn" id="lRight" onmousedown="sendControl(this)">&rarr;</button></td>
+                <td><button class="tikoBtn sendControl" id="lRight">&rarr;</button></td>
               </tr>
               <tr style="height:29%;">
                 <td>&nbsp;</td>
-                <td><button class="tikoBtn" id="lDown" onmousedown="sendControl(this)">&darr;</button></td>
+                <td><button class="tikoBtn sendControl" id="lDown">&darr;</button></td>
                 <td>&nbsp;</td>
               </tr>
             </tbody>
@@ -149,24 +190,24 @@
           <table class="controlTable">
             <tbody>
               <tr style="height:13%;">
-                <td><button style="color:#6500d8;" class="tikoBtn" id="m2" onmousedown="sendControl(this)">M2</button></td>
-                <td><button style="color:#6500d8;" class="tikoBtn" id="rt" onmousedown="sendControl(this)">RT</button></td>
-                <td><button style="color:#6500d8;" class="tikoBtn" id="rB" onmousedown="sendControl(this)">RB</button></td>
-                <td rowspan="4" style="width:17%;"><input type="range" min="-100" max="100" value="0" class="throttleRange" id="rThrottle" onchange="resetThrottle(this)" oninput="sendControl(this)"/></td>
+                <td><button style="color:#6500d8;" class="tikoBtn sendControl" id="m2">M2</button></td>
+                <td><button style="color:#6500d8;" class="tikoBtn sendControl" id="rt">RT</button></td>
+                <td><button style="color:#6500d8;" class="tikoBtn sendControl" id="rB">RB</button></td>
+                <td rowspan="4" style="width:17%;"><input type="range" min="-100" max="100" value="0" class="throttleRange sendControl" id="rThrottle" onchange="resetThrottle(this)"/></td>
               </tr>
               <tr style="height:29%;">
                 <td>&nbsp;</td>
-                <td><button class="tikoBtn" id="rUp" onmousedown="sendControl(this)">X</button></td>
+                <td><button class="tikoBtn sendControl" id="rUp">X</button></td>
                 <td>&nbsp;</td>
               </tr>
               <tr style="height:29%;">
-                <td><button class="tikoBtn" id="rLeft" onmousedown="sendControl(this)">Y</button></td>
+                <td><button class="tikoBtn sendControl" id="rLeft">Y</button></td>
                 <td>&nbsp;</td>
-                <td><button style="color:#04AA6D;"class="tikoBtn" id="rRight" onmousedown="sendControl(this)">A</button></td>
+                <td><button style="color:#04AA6D;"class="tikoBtn sendControl" id="rRight">A</button></td>
               </tr>
               <tr style="height:29%;">
                 <td>&nbsp;</td>
-                <td><button style="color:#b30101;" class="tikoBtn" id="rDown" onmousedown="sendControl(this)">B</button></td>
+                <td><button style="color:#b30101;" class="tikoBtn sendControl" id="rDown">B</button></td>
                 <td>&nbsp;</td>
               </tr>
             </tbody>

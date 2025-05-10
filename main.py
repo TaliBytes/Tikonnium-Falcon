@@ -348,8 +348,14 @@ def getContent()->str:
       content = f'<p>Could not find home page. Err: {err}</p>'
     finally: 
       response_headers['contentType'] = 'text/html; charset="UTF-8"'
-  elif path in ['favicon.ico', '/favicon.ico']:
+
+  elif path == '/favicon.ico':
     print('favicon.ico file exists but returning files to client is not yet supported')
+
+  # process AJAX command and send response
+  elif path == '/command':
+    content = f'commandReceived'
+
   else:
     content = f"not-home, is {path}"
   
