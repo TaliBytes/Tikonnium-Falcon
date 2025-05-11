@@ -2,6 +2,7 @@
 <html>
   <head>
     <title>Tikonnium Falcon Controller</title>
+    <link ref="icon" href="/favicon.ico" type="image/x-icon"/>
 
     <script>
       window.addEventListener('load', (e) => {
@@ -23,6 +24,42 @@
             }, 125*(i+1))
           }
         }
+      });
+
+      
+      document.addEventListener('keydown', function(e) {
+        console.log(e.key);
+        // left hand side controls
+        if (e.key == 'ArrowUp') {document.getElementById('lUp').click();}
+        if (e.key == 'ArrowLeft') {document.getElementById('lLeft').click();}
+        if (e.key == 'ArrowRight') {document.getElementById('lRight').click();}
+        if (e.key == 'ArrowDown') {document.getElementById('lDown').click();}
+
+        // right hand side controls
+        if (e.key == 'x') {document.getElementById('rUp').click();}
+        if (e.key == 'y') {document.getElementById('rLeft').click();}
+        if (e.key == 'a') {document.getElementById('rRight').click();}
+        if (e.key == 'b') {document.getElementById('rDown').click();}
+        
+        // left hand bumpers
+        if (e.key == '1') {document.getElementById('lB').click();}
+        if (e.key == '2') {document.getElementById('lT').click();}
+        if (e.key == '3') {document.getElementById('m1').click();}
+        
+        // right hand bumpers
+        if (e.key == '7') {document.getElementById('m2').click();}
+        if (e.key == '8') {document.getElementById('rT').click();}
+        if (e.key == '9') {document.getElementById('rB').click();}
+        
+        // left hand throttle
+        lThrottle = document.getElementById('lThrottle');
+        if (e.key == 'w') {lThrottle.value = 100; lThrottle.dispatchEvent(new Event('change', { bubbles: true }));}
+        if (e.key == 's') {lThrottle.value = -100; lThrottle.dispatchEvent(new Event('change', { bubbles: true }));}
+        
+        // right hand throttle
+        rThrottle = document.getElementById('rThrottle');
+        if (e.key == 'i') {rThrottle.value = 100; rThrottle.dispatchEvent(new Event('change', { bubbles: true }));}
+        if (e.key == 'k') {rThrottle.value = -100; rThrottle.dispatchEvent(new Event('change', { bubbles: true }));}
       });
 
 
@@ -171,17 +208,17 @@
               </tr>
               <tr style="height:29%;">
                 <td>&nbsp;</td>
-                <td><button class="tikoBtn sendControl" id="lUp">&uarr;</button></td>
+                <td><button class="tikoBtn sendControl" id="lUp" onclick="document.getElementById('lThrottle').value = 100; document.getElementById('rThrottle').value = 100;">&uarr;</button></td>
                 <td>&nbsp;</td>
               </tr>
               <tr style="height:29%;">
-                <td><button class="tikoBtn sendControl" id="lLeft">&larr;</button></td>
+                <td><button class="tikoBtn sendControl" id="lLeft" onclick="document.getElementById('lThrottle').value = 0; document.getElementById('rThrottle').value = 0;">&larr;</button></td>
                 <td>&nbsp;</td>
-                <td><button class="tikoBtn sendControl" id="lRight">&rarr;</button></td>
+                <td><button class="tikoBtn sendControl" id="lRight" onclick="document.getElementById('lThrottle').value = 0; document.getElementById('rThrottle').value = 0;">&rarr;</button></td>
               </tr>
               <tr style="height:29%;">
                 <td>&nbsp;</td>
-                <td><button class="tikoBtn sendControl" id="lDown">&darr;</button></td>
+                <td><button class="tikoBtn sendControl" id="lDown" onclick="document.getElementById('lThrottle').value = -100; document.getElementById('rThrottle').value = -100;">&darr;</button></td>
                 <td>&nbsp;</td>
               </tr>
             </tbody>
@@ -194,7 +231,7 @@
             <tbody>
               <tr style="height:13%;">
                 <td><button style="color:#6500d8;" class="tikoBtn sendControl" id="m2">M2</button></td>
-                <td><button style="color:#6500d8;" class="tikoBtn sendControl" id="rt">RT</button></td>
+                <td><button style="color:#6500d8;" class="tikoBtn sendControl" id="rT">RT</button></td>
                 <td><button style="color:#6500d8;" class="tikoBtn sendControl" id="rB">RB</button></td>
                 <td rowspan="4" style="width:17%;"><input type="range" min="-100" max="100" value="0" class="throttleRange sendControl" id="rThrottle" onchange="resetThrottle(this)"/></td>
               </tr>
@@ -210,7 +247,7 @@
               </tr>
               <tr style="height:29%;">
                 <td>&nbsp;</td>
-                <td><button style="color:#b30101;" class="tikoBtn sendControl" id="rDown">B</button></td>
+                <td><button style="color:#b30101;" class="tikoBtn sendControl" id="rDown" onclick="document.getElementById('lThrottle').value = 0; document.getElementById('rThrottle').value = 0;">B</button></td>
                 <td>&nbsp;</td>
               </tr>
             </tbody>

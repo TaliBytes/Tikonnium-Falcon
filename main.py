@@ -131,6 +131,13 @@ async def tikoReverse()->None:
 # set tiko to turn 90deg left
 async def tikoTurnLeft()->None:
   tasks = [
+    asyncio.create_task(transitionPMW(16, 00000, .1)),
+    asyncio.create_task(transitionPMW(17, 00000, .1)),
+    asyncio.create_task(transitionPMW(18, 00000, .1)),
+    asyncio.create_task(transitionPMW(19, 00000, .1)),
+  ]
+  await asyncio.gather(*tasks)
+  tasks = [
     asyncio.create_task(transitionPMW(16, decimalToPWM(.75), .1)),
     asyncio.create_task(transitionPMW(17, 00000, .1)),
     asyncio.create_task(transitionPMW(18, 00000, .1)),
@@ -152,6 +159,13 @@ async def tikoTurnLeft()->None:
 
 # set tiko to turn 90deg right
 async def tikoTurnRight()->None:
+  tasks = [
+    asyncio.create_task(transitionPMW(16, 00000, .1)),
+    asyncio.create_task(transitionPMW(17, 00000, .1)),
+    asyncio.create_task(transitionPMW(18, 00000, .1)),
+    asyncio.create_task(transitionPMW(19, 00000, .1)),
+  ]
+  await asyncio.gather(*tasks)
   tasks = [
     asyncio.create_task(transitionPMW(16, 00000, .1)),
     asyncio.create_task(transitionPMW(17, decimalToPWM(.75), .1)),
@@ -358,6 +372,8 @@ def parseHeaders(headers:str) -> dict:
 
 async def constructResponse(request_headers, request_content)->bytes:
   """Setup initial headers, get desired response, send it"""
+  headersEncoded:bytes
+  contentEncoded:bytes
 
   response_headers = {}
   response_content, response_headers = await getContent(request_headers, request_content) # get/generate content based on request data
@@ -367,17 +383,19 @@ async def constructResponse(request_headers, request_content)->bytes:
   response_headers.setdefault('contentType', 'text/html; charset="UTF-8"')
   response_headers.setdefault('connection', 'close')
 
+  if type(response_content) == 'str':
+    contentEncoded = response_content.encode('utf-8')
+  else:
+    contentEncoded = response_content # assumed to be bytes
+
   # construct response header
+  # no response time because pico does not have RTC
   headers =  f"HTTP/1.1 {response_headers['statusCode']} {response_headers['statusMessage']}\r\n"
-  headers += f"Content-Length: {len(response_content.encode('utf-8'))}\r\n"
+  headers += f"Content-Length: {len(response_content)}\r\n"
   headers += f"Connection: {response_headers['connection']}\r\n"  
   headers += f"Content-Type: {response_headers['contentType']}\r\n"
-  # no response time because pico does not have RTC
-
   headers += f"\r\n"  #marks end of headers, start of body
-
-  headersEncoded = headers.encode('utf-8')
-  contentEncoded = response_content.encode('utf-8')
+  headersEncoded:bytes = headers.encode('utf-8')
 
   response = headersEncoded + contentEncoded
   return(response)
@@ -386,7 +404,7 @@ async def constructResponse(request_headers, request_content)->bytes:
 
 
 
-async def getContent(request_headers:dict, request_content:str)->tuple[str,dict]:
+async def getContent(request_headers:dict, request_content:str)->tuple[str|bytes,dict]:
   """Returns HTML based on request headers"""
   response_headers = {}
   content:str = ''
@@ -404,7 +422,13 @@ async def getContent(request_headers:dict, request_content:str)->tuple[str,dict]
       response_headers['contentType'] = 'text/html; charset="UTF-8"'
 
   elif path == '/favicon.ico':
-    print('favicon.ico file exists but returning files to client is not yet supported')
+    try:
+      with open('favicon.ico', 'rb') as icon:
+        content = icon.read()
+      response_headers['contentType'] = 'image/x-icon'
+    except Exception as err:
+      content = f'Favicon error: {err}'
+      response_headers['contentType'] = 'text/html; charset="UTF-8"'
 
   # process AJAX command and send response
   elif path == '/command':
