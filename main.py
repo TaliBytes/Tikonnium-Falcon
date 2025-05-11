@@ -1,24 +1,25 @@
 #networking
-#import datetime
 import network, socket
 
 #micro-controller
 import asyncio
+import gc #garbage collector
 from machine import Pin, PWM, I2C
 import ssd1306 as disp
-import time
+import ujson
+import utime
+
+# utime variables
+weekdays_abbr = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+months_abbr = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 
-#GLOBAL VARIABLES
+# GLOBAL VARIABLES
 # wifi settings
 ssidName:str|None = None
 ssidPwd :str|None = None
 ip:str|None = None
 port = 80
-
-request_headers:dict = {}     # client's request headers
-response_headers:dict = {}    # server's response headers
-response_content:str = ''     # content returned by server
 
 # I2C Display Configuration
 i2c = I2C(0, sda=Pin(0), scl=Pin(1), freq=400000)
@@ -85,13 +86,27 @@ async def transitionPMW(pin, newDuty:int=0, seconds:float=1, steps:int=1000)->No
 
 
 
+# set tiko to full stop
+async def tikoStop()->None:
+  tasks = [
+    asyncio.create_task(transitionPMW(16, 00000, .1)),
+    asyncio.create_task(transitionPMW(17, 00000, .1)),
+    asyncio.create_task(transitionPMW(18, 00000, .1)),
+    asyncio.create_task(transitionPMW(19, 00000, .1)),
+  ]
+  await asyncio.gather(*tasks)
+
+
+
+
+
 # set tiko to move forward
 async def tikoForward()->None:
   tasks = [
-    asyncio.create_task(transitionPMW(16, 65535, .25)),
-    asyncio.create_task(transitionPMW(17, 00000, .25)),
-    asyncio.create_task(transitionPMW(18, 65535, .25)),
-    asyncio.create_task(transitionPMW(19, 00000, .25)),
+    asyncio.create_task(transitionPMW(16, 65535, .1)),
+    asyncio.create_task(transitionPMW(17, 00000, .1)),
+    asyncio.create_task(transitionPMW(18, 65535, .1)),
+    asyncio.create_task(transitionPMW(19, 00000, .1)),
   ]
   await asyncio.gather(*tasks)
 
@@ -102,10 +117,54 @@ async def tikoForward()->None:
 # set tiko to move backward
 async def tikoReverse()->None:
   tasks = [
-    asyncio.create_task(transitionPMW(16, 00000, .25)),
-    asyncio.create_task(transitionPMW(17, 65535, .25)),
-    asyncio.create_task(transitionPMW(18, 00000, .25)),
-    asyncio.create_task(transitionPMW(19, 65535, .25)),
+    asyncio.create_task(transitionPMW(16, 00000, .1)),
+    asyncio.create_task(transitionPMW(17, 65535, .1)),
+    asyncio.create_task(transitionPMW(18, 00000, .1)),
+    asyncio.create_task(transitionPMW(19, 65535, .1)),
+  ]
+  await asyncio.gather(*tasks)
+
+
+
+
+
+# set tiko to turn 90deg left
+async def tikoTurnLeft()->None:
+  tasks = [
+    asyncio.create_task(transitionPMW(16, decimalToPWM(.75), .1)),
+    asyncio.create_task(transitionPMW(17, 00000, .1)),
+    asyncio.create_task(transitionPMW(18, 00000, .1)),
+    asyncio.create_task(transitionPMW(19, decimalToPWM(.75), .1)),
+  ]
+  await asyncio.gather(*tasks)
+  utime.sleep(.1839)
+  tasks = [
+    asyncio.create_task(transitionPMW(16, 00000, .1)),
+    asyncio.create_task(transitionPMW(17, 00000, .1)),
+    asyncio.create_task(transitionPMW(18, 00000, .1)),
+    asyncio.create_task(transitionPMW(19, 00000, .1)),
+  ]
+  await asyncio.gather(*tasks)
+
+
+
+
+
+# set tiko to turn 90deg right
+async def tikoTurnRight()->None:
+  tasks = [
+    asyncio.create_task(transitionPMW(16, 00000, .1)),
+    asyncio.create_task(transitionPMW(17, decimalToPWM(.75), .1)),
+    asyncio.create_task(transitionPMW(18, decimalToPWM(.75), .1)),
+    asyncio.create_task(transitionPMW(19, 00000, .1)),
+  ]
+  await asyncio.gather(*tasks)
+  utime.sleep(.1839)
+  tasks = [
+    asyncio.create_task(transitionPMW(16, 00000, .1)),
+    asyncio.create_task(transitionPMW(17, 00000, .1)),
+    asyncio.create_task(transitionPMW(18, 00000, .1)),
+    asyncio.create_task(transitionPMW(19, 00000, .1)),
   ]
   await asyncio.gather(*tasks)
 
@@ -198,29 +257,6 @@ def getConfig()->None:
 
 
 
-def setupSocket()->None:
-  """Configure socket(s) to listen on"""
-  global ip, port
-
-  aSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-  aSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-
-  # bind socket to port
-  try:
-    aSocket.bind((str(ip), int(port)))
-    aSocket.listen(5) # max connections
-    print(f"Configured socket binding for {ip}:{port}")
-  except Exception as err:
-    print(f"Couldn't configure socket binding for {ip}:{port} ... Error: {str(err)}")
-    aSocket.close() # close on err
-    return None
-
-  aSocket.close() # close when done
-
-
-
-
-
 async def startServer()->None:
   """Initialize the server"""
   global ip, port
@@ -258,39 +294,54 @@ async def startServer()->None:
 
 async def handleRequest(reader, writer)->None:
   """Entry point for handling a client request"""
+  request_headers = {}  # placeholder
   request = await reader.read(1024)
   clientAddr = writer.get_extra_info('peername')
+  part_header, _, part_body = request.partition(b'\r\n\r\n')
+  headers = part_header.decode('utf-8')
 
-  if len(request) > 0:
-    parseRequest(request.decode('utf-8')) # parse request into usable data
+  if len(headers) > 0:
+    request_headers = parseHeaders(headers)     # parse headers into usable data
     print(f"\nconn with {clientAddr}: requested {request_headers['path']}")
 
-    response = constructResponse()        # respond to request by building response
+  try:
+    body_length = int(request_headers.get('content-length', 0))
+    body = part_body
+    while len(body) < body_length:
+      nextPacket = await reader.read(body_length - len(body))
+      if not nextPacket: break
+      else: body += nextPacket
+    request_content = body.decode('utf-8')  # utf-8 because only text content is being transmitted from client
+  except Exception as err:
+    print(f'Could not process request body for {clientAddr} fetching {request_headers["path"]}! Error: {err}')
+
+  if request_headers:
+    response = await constructResponse(request_headers, request_content)    # respond to request by building response
     writer.write(response)
     print(f"conn withh {clientAddr}: sent response")
-    await writer.drain()  # ensures actual sending of response
 
+  await writer.drain()  # ensures actual sending of response
   print(f"conn with {clientAddr}: closed.")
-  writer.close()
+  await writer.wait_closed()
+  gc.collect()  # manage garbage
 
 
 
 
 
-def parseRequest(request:str)->None:
-  """parses a client request into usable data before using said data to create a response"""
-  global request_headers
+def parseHeaders(headers:str) -> dict:
+  """parses a client request headers into usable data before using said data to create a response"""
   request_headers = {}
 
-  request = str(request)
-  lines:list = request.split("\r\n")
+  headers = str(headers)
+  lines:list = headers.split("\r\n")
 
   rqstLine:str = lines[0]
   method, path, protocol = rqstLine.split(' ')
   request_headers['method'] = method
   request_headers['path'] = path
   request_headers['protocol'] = protocol
-  #request_headers['date'] = datetime.datetime.now().strftime("%a, $d %b %Y %H:%M:00 MST")
+  # no request time because pico does not have RTC
 
   for line in lines[1:]:
     if line == "":
@@ -299,15 +350,17 @@ def parseRequest(request:str)->None:
     key, value = line.split(":", 1)
     request_headers[key.strip()] = value.strip()
 
+  return(request_headers)
 
 
 
 
-def constructResponse()->bytes:
+
+async def constructResponse(request_headers, request_content)->bytes:
   """Setup initial headers, get desired response, send it"""
-  global response_headers, response_content
 
-  response_content = getContent() # get/generate content based on request data
+  response_headers = {}
+  response_content, response_headers = await getContent(request_headers, request_content) # get/generate content based on request data
 
   response_headers.setdefault('statusCode', 200)
   response_headers.setdefault('statusMessage', 'OK')
@@ -319,7 +372,7 @@ def constructResponse()->bytes:
   headers += f"Content-Length: {len(response_content.encode('utf-8'))}\r\n"
   headers += f"Connection: {response_headers['connection']}\r\n"  
   headers += f"Content-Type: {response_headers['contentType']}\r\n"
-  #headers += f"Date: {datetime.datetime.now().strftime('%a, %d %b %Y %H:%M:00 MST')}\r\n"
+  # no response time because pico does not have RTC
 
   headers += f"\r\n"  #marks end of headers, start of body
 
@@ -333,11 +386,12 @@ def constructResponse()->bytes:
 
 
 
-def getContent()->str:
+async def getContent(request_headers:dict, request_content:str)->tuple[str,dict]:
   """Returns HTML based on request headers"""
-  global request_headers, response_headers
+  response_headers = {}
   content:str = ''
 
+  # home page / controller page
   path = request_headers['path']
   if path in ['', '/', '/home']:
     try:
@@ -354,12 +408,68 @@ def getContent()->str:
 
   # process AJAX command and send response
   elif path == '/command':
-    content = f'commandReceived'
+    try:
+      json_data = ujson.loads(request_content)
+      targetID = json_data.get('targetID')
+      targetValue = json_data.get('targetValue')
+    except Exception as err:
+      print('Error parsing JSON payload: {err}')
+    finally:
+      if targetID:
+        # execute command and get status message (if applicable)
+        statusMessage = await executeCMD(targetID, targetValue)
+        content = statusMessage
+
+  # trick iPhones into believing this network is valid (not very reliable)
+  elif path == '/hotspot-detect.html':
+    content = '<!DOCTYPE HTML><HTML><HEAD><TITLE>Success</TITLE></HEAD><BODY>Success</BODY></HTML>'
+
+  # trick android devices into believing this network is valid (unknown reliability)
+  elif path == '/generate_204':
+    response_headers['statusCode'] = 204
+    response_headers['statusMessage'] = 'No Content'
+    content = ''
 
   else:
     content = f"not-home, is {path}"
   
-  return(content)
+  return(content, response_headers)
+
+
+
+
+
+async def executeCMD(cmd, val) -> str:
+  """Takes command from client and executes it on hardware"""
+  print(cmd, val)
+  statusMessage = ''  # if a status message needs to be sent...
+
+  # throttle controls
+  if cmd in ['lThrottle', 'rThrottle']:
+    # val is range -100 to 100... /100 to convert to decimal
+    if cmd == 'lThrottle': await tikoSetLeft(decimalToPWM(int(val)/100))
+    if cmd == 'rThrottle': await tikoSetRight(decimalToPWM(int(val)/100))
+
+  # left hand side controls
+  if cmd == 'lB': statusMessage = f'{cmd} not integrated'
+  if cmd == 'lT': statusMessage = f'{cmd} not integrated'
+  if cmd == 'm1': statusMessage = f'{cmd} not integrated'
+  if cmd == 'lUp': await tikoForward()
+  if cmd == 'lLeft': await tikoTurnLeft()
+  if cmd == 'lRight': await tikoTurnRight()
+  if cmd == 'lDown': await tikoReverse()
+
+  # right hand side controls
+  if cmd == 'rB': statusMessage = f'{cmd} not integrated'
+  if cmd == 'rT': statusMessage = f'{cmd} not integrated'
+  if cmd == 'm2': statusMessage = f'{cmd} not integrated'
+  if cmd == 'rUp': statusMessage = f'{cmd} not integrated'
+  if cmd == 'rLeft': statusMessage = f'{cmd} not integrated'
+  if cmd == 'rRight': statusMessage = f'{cmd} not integrated'
+  if cmd == 'rDown': await tikoStop()
+
+  if not statusMessage: statusMessage = ''
+  return(statusMessage)
 
 
 
@@ -379,7 +489,7 @@ if __name__ == "__main__":
   getConfig()
   ap = network.WLAN(network.AP_IF)
   ap.active(False)  # clean up old network
-  time.sleep(1)
+  utime.sleep(1)
   ap.config(ssid=str(ssidName), password=str(ssidPwd))
   ap.active(True)
 
@@ -387,14 +497,13 @@ if __name__ == "__main__":
   while not ap.active():
     print('Configuring access point...')
     counter += 1
-    time.sleep(1)
+    utime.sleep(1)
   print("Access point configured!")
 
   # guarantee splash screen shows for at least 5 seconds
-  time.sleep(min(5-counter,0))  
+  utime.sleep(min(5-counter,0))  
 
   ip = ap.ifconfig()[0]
-  setupSocket()
 
   # stats screen
   if oled is not None:

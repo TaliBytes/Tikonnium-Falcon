@@ -25,6 +25,7 @@
         }
       });
 
+
       ['change', 'click'].forEach(eventType => {
         document.addEventListener(eventType, function(event) {
           // has to be a sendControl element and ignore clicks on range (throttle)
@@ -36,6 +37,7 @@
         });
       });
 
+
       window.sendControl=sendControl;
       function sendControl(e) {
         const target = e.target;
@@ -43,26 +45,18 @@
         const targetValue = target.value;
         const targetTag = target.tagName;
         const targetType = target.type;
-        let send_data;
+        let send_data = {};
 
-        send_data += '&targetID=' + targetID;
+        send_data.targetID=targetID;
         //if (targetTag.toLowerCase() == 'button') {}                                         //unique values just for buttons
         if (targetTag.toLowerCase() == 'input' && targetType.toLowerCase() == 'range') {     // unique values just for range input
-          send_data += '&targetValue=' + targetValue;
+          send_data.targetValue=targetValue;
         }
-
-        let options = {
-          url: document.url,
-          success:showResponse,
-          type: 'post',
-          resetForm:true,
-          data:send_data
-        };
 
         fetch('/command', {
           method: 'POST',
-          headers: {'Content-Type': 'application/x-www-form-urlencoded',},
-          body: send_data.toString(),
+          headers: {'Content-Type': 'application/json',},
+          body: JSON.stringify(send_data),
         })
         .then(response => response.text())
         .then(showResponse)
@@ -73,7 +67,11 @@
 
       window.showResponse = showResponse;
       function showResponse(e) {
-        console.log('showResponse:', e);
+        stats = document.getElementById('statScreen')
+        if (['', undefined, null].includes(e)) return;
+        // add to stats screen if it isn't empty
+        stats.innerHTML += e + '<br/>';
+        stats.scrollTop = statScreen.scrollHeight;
       }
 
 
@@ -96,7 +94,7 @@
       #controller {position:relative; width:100%; height:100%;}
       #viewer, #stats, #controls {position:absolute;}
       /* #viewer {background-image:url('/home/talibytes/Projects/RaspiPico/tikonnium-falcon/IMG_6524.JPEG');background-size:cover; background-position: center; z-index:1; inset:0;} */
-      #stats {bottom:0; left:50%; transform:translateX(-50%); width:60%; height:34dvh; z-index:2;}
+      #stats {bottom:0; left:50%; transform:translateX(-50%); width:60%; height:34dvh; z-index:4;}
       #controls {position:absolute; bottom:0; width:100%; height:34dvh; z-index:3;}
 
       #control1, #control2 {position:absolute; bottom:0; width:20%; height:100%; color:white; text-align:center;}
@@ -104,7 +102,12 @@
 
       /* INDIVIDUAL STYLING */
       #stats, #control1, #control2 {background:rgba(19, 31, 46, 0.5);}
-      #statScreen {width:calc(100%-18px); height:100%; background:#333; border:2px solid limegreen; padding:9px; border-radius:7px; color:limegreen; overflow-y:scroll;}
+      #statScreen {
+        width:calc(100% - 18px); height:34dvh; padding:9px;  
+        background:#333; border:2px solid limegreen; border-radius:7px;
+        overflow:auto; box-sizing: border-box;
+        color:limegreen;
+      }
 
 
       /* CONTROLS */
