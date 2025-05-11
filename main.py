@@ -79,7 +79,7 @@ async def transitionPMW(pin, newDuty:int=0, seconds:float=1, steps:int=1000)->No
     return None
 
   else: # old and new are equivalent
-    #print(f"C. Pin {pin} old and new duties are equivalent ... no transition")
+    #print(f"Pin {pin} old and new duties are equivalent ... no transition")
     return None
 
 
@@ -308,34 +308,58 @@ async def startServer()->None:
 
 async def handleRequest(reader, writer)->None:
   """Entry point for handling a client request"""
-  request_headers = {}  # placeholder
-  request = await reader.read(1024)
+  # placeholders
+  request_headers = {}
+  request_content = None
+  response = None
+
+  request = b''
+  while b'\r\n\r\n' not in request:
+    packet = await reader.read(1024)
+    if not packet: break
+    request += packet
+
   clientAddr = writer.get_extra_info('peername')
   part_header, _, part_body = request.partition(b'\r\n\r\n')
   headers = part_header.decode('utf-8')
 
   if len(headers) > 0:
     request_headers = parseHeaders(headers)     # parse headers into usable data
-    print(f"\nconn with {clientAddr}: requested {request_headers['path']}")
+    print(f"\nconn with {clientAddr}: rqst {request_headers['path']}")
+
+    if 'Content-Length' in request_headers: body_length = int(request_headers['Content-Length'])
+    else: body_length = 0
 
   try:
-    body_length = int(request_headers.get('content-length', 0))
     body = part_body
+    emptyPackets = 0
+
     while len(body) < body_length:
       nextPacket = await reader.read(body_length - len(body))
-      if not nextPacket: break
+      if not nextPacket:
+        if emptyPackets == 10: break  # prevent waiting indefintely
+        emptyPackets += 1
+        await asyncio.sleep(0.05)
+        print(f'Awaiting additional packet(s) attempt {emptyPackets+1}/10...')
+        continue
       else: body += nextPacket
+
+    if len(body) < body_length:
+      print(f'Incomplete body received! Received {len(body)}/{body_length}')
+      raise ValueError(f'Incomplete body received! Received {len(body)}/{body_length}')
+
     request_content = body.decode('utf-8')  # utf-8 because only text content is being transmitted from client
   except Exception as err:
     print(f'Could not process request body for {clientAddr} fetching {request_headers["path"]}! Error: {err}')
 
+
   if request_headers:
     response = await constructResponse(request_headers, request_content)    # respond to request by building response
     writer.write(response)
-    print(f"conn withh {clientAddr}: sent response")
+    print(f"conn with {clientAddr}: sent response")
 
   await writer.drain()  # ensures actual sending of response
-  print(f"conn with {clientAddr}: closed.")
+  print(f"conn with {clientAddr}: closed")
   await writer.wait_closed()
   gc.collect()  # manage garbage
 
@@ -432,17 +456,22 @@ async def getContent(request_headers:dict, request_content:str)->tuple[str|bytes
 
   # process AJAX command and send response
   elif path == '/command':
+    targetID = None
+    targetValue = None
+    json_data = None
     try:
       json_data = ujson.loads(request_content)
       targetID = json_data.get('targetID')
       targetValue = json_data.get('targetValue')
     except Exception as err:
-      print('Error parsing JSON payload: {err}')
+      print(f'Error parsing JSON payload ({json_data}): {err}')
+      statusMessage = 'Command failed'
     finally:
       if targetID:
         # execute command and get status message (if applicable)
         statusMessage = await executeCMD(targetID, targetValue)
-        content = statusMessage
+      content = statusMessage
+      response_headers['contentType'] = 'text/html; charset="UTF-8"'
 
   # trick iPhones into believing this network is valid (not very reliable)
   elif path == '/hotspot-detect.html':
@@ -465,7 +494,7 @@ async def getContent(request_headers:dict, request_content:str)->tuple[str|bytes
 
 async def executeCMD(cmd, val) -> str:
   """Takes command from client and executes it on hardware"""
-  print(cmd, val)
+  #print(f'Executing {cmd} with value {val}.')
   statusMessage = ''  # if a status message needs to be sent...
 
   # throttle controls

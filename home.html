@@ -90,10 +90,11 @@
           send_data.targetValue=targetValue;
         }
 
+        send_data = JSON.stringify(send_data)
         fetch('/command', {
           method: 'POST',
           headers: {'Content-Type': 'application/json',},
-          body: JSON.stringify(send_data),
+          body: send_data,
         })
         .then(response => response.text())
         .then(showResponse)
@@ -154,10 +155,11 @@
         & tbody {height:100%;}
         & tr th, & tr td {padding:3px; width:84px;}
       }
+      
       .throttleRange {
         position:relative; writing-mode:vertical-lr;
-        width:17px; height:30%;
-        appearance:none; border-radius:999px;
+        width:17px; height:30%; min-height:200px;
+        appearance:none; -webkit-appearance: none; border-radius:999px;
         background:#ffffff; outline:none; opacity:0.7;
         transition: opacity .2s; &:hover {opacity:1;}
         transform:rotate(180deg); /*  so up is increased throttle and down is decreased  */
@@ -168,6 +170,13 @@
           cursor:pointer; border-radius:999px;
           
         }
+
+        &::-webkit-slider-runnable-track {
+          background: #ffffff;
+          border-radius: 999px;
+          width: 17px;
+        }
+
         &#lThrottle {&::-moz-range-thumb, &::-webkit-slider-thumb {background-color:#04AA6D;}}
         &#rThrottle {&::-moz-range-thumb, &::-webkit-slider-thumb {background-color:#d8c200;}}
       }
