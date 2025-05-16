@@ -25,6 +25,6 @@ This project uses an 128x64 I2C display which runs with SSD1306 drivers; Tiko us
 ## PROJECT STATUS
 
 The project is currently considered complete, though more could be done if ever I choose to pick it back up.
-[Here](https://github.com/TaliBytes/Tikonnium-Falcon/wiki/Tikkonnium-Project-Chronicle) is a written summary of the project, including decision making and reflection.
+[Here](https://github.com/TaliBytes/Tikonnium-Falcon/wiki/Tikonnium-Project-Chronicle) is a written summary of the project, including decision making and reflection.
 
 *The circuit-diagram.png was created using [Circuit Diagram Web Editor.](https://circuit-diagram.org/)*
